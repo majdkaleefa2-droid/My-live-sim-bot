@@ -4,36 +4,41 @@ import ccxt
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 
-# 1. السيرفر الوهمي لتنبيه المنصة المجانية ومنع خطأ الموانئ
-class WebServer(BaseHTTPRequestHandler):
+# 1. إعداد السيرفر الوهمي بأبسط طريقة ممكنة لمنع تعارض ريندر
+class SimpleWeb(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html")
         self.end_headers()
-        self.wfile.write(b"Trading Bot Simulator is Running!")
+        self.wfile.write(b"Bot Active")
+    def log_message(self, format, *args):
+        return  # كتم سجلات السيرفر الوهمي لمنع زحمة الشاشة
 
-def run_web_server():
-    server = HTTPServer(('0.0.0.0', 10000), WebServer)
-    server.serve_forever()
+def start_server():
+    try:
+        server = HTTPServer(('0.0.0.0', 10000), SimpleWeb)
+        server.serve_forever()
+    except Exception:
+        pass
 
-threading.Thread(target=run_web_server, daemon=True).start()
+# تشغيل السيرفر في مسار خلفي مستقل تماماً قبل أي شيء
+threading.Thread(target=start_server, daemon=True).start()
+time.sleep(1)
 
-print("📐 تشغيل محاكي المراجحة المثلثية الحي (Triangular Arbitrage)...")
-print("-" * 75)
+print("📐 تشغيل محاكي المراجحة المثلثية الحي (Triangular Arbitrage)...", flush=True)
+print("-" * 75, flush=True)
 
-# 2. إعداد الاتصال المجاني ببينانس وقراءة الأسعار الحية
+# 2. بدء الاتصال الفوري ببينانس
 exchange = ccxt.binance()
-
-# إعدادات الحساب المالي (المحفظة الافتراضية للقياس الحي)
 demo_balance = 1000.0  
-fee_rate = 0.00075     # عمولة بينانس المخفضة باستخدام BNB (0.075%)
+fee_rate = 0.00075     # عمولة المزاد التراكمية المخفضة (0.075%)
 total_opportunities = 0
 successful_trades = 0
 
-print(f"💰 الرصيد الابتدائي المحفوظ في السيرفر: ${demo_balance:.2f}")
-print("-" * 75)
+print(f"💰 الرصيد الابتدائي المحفوظ في السيرفر: ${demo_balance:.2f}", flush=True)
+print("-" * 75, flush=True)
 
-# 3. فحص الدورة المثلثية ثانية بثانية للأبد مع البث الفوري المباشر
+# 3. فحص الدورة المثلثية اللحظية وبثها فوراً للشاشة
 while True:
     try:
         btc_ticker = exchange.fetch_ticker('BTC/USDT')
@@ -48,7 +53,7 @@ while True:
         total_fees = fee_rate * 3
         net_return_rate = raw_return - total_fees
         
-        # كلمة flush=True هنا تجبر السيرفر على إظهار السعر فوراً على شاشتك دون تعليق
+        # طباعة نبض السوق بشكل فوري وحي دون أي تجميد
         print(f"🔄 فحص حي | BTC: ${p_btc_usdt:.1f} | العائد الصافي للدورة: {net_return_rate:.5f}", flush=True)
         
         if net_return_rate > 1.0001:
