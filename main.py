@@ -1,49 +1,65 @@
+
 import time
 import ccxt
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 
-# هذا هو الجزء السحري لفتح منفذ وهمي يخدع السيرفر المجاني ويمنعه من الوقوف
+# 1. السيرفر الوهمي لتنبيه المنصة المجانية ومنع خطأ الموانئ
 class WebServer(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html")
         self.end_headers()
-        self.wfile.write(b"Bot is Running Safely!")
+        self.wfile.write(b"Trading Bot Simulator is Running!")
 
 def run_web_server():
-    # المنفذ 10000 هو المطلوب تماماً لمنصة ريندر مجاناً
     server = HTTPServer(('0.0.0.0', 10000), WebServer)
     server.serve_forever()
 
-# تشغيل السيرفر الوهمي في الخلفية كمسار مستقل
 threading.Thread(target=run_web_server, daemon=True).start()
 
-print("⚡ بَدْء تشغيل البوت المجاني بمحفظة وهمية وسعر حي من بينانس...")
-print("-" * 60)
+print("📐 تشغيل محاكي المراجحة المثلثية الحي (Triangular Arbitrage)...")
+print("-" * 75)
 
+# 2. إعداد الاتصال المجاني ببينانس وقراءة الأسعار الحية
 exchange = ccxt.binance()
-USDT_BALANCE = 1000.0  
-TOTAL_FEES = 0.001 * 3 
 
+# إعدادات الحساب المالي (المحفظة الافتراضية للقياس الحي)
+demo_balance = 1000.0  
+fee_rate = 0.00075     # عمولة بينانس المخفضة باستخدام BNB (0.075%)
+total_opportunities = 0
+successful_trades = 0
+
+print(f"💰 الرصيد الابتدائي المحفوظ في السيرفر: ${demo_balance:.2f}")
+print("-" * 75)
+
+# 3. فحص الدورة المثلثية ثانية بثانية للأبد مع البث الفوري المباشر
 while True:
     try:
-        btc_ask = exchange.fetch_ticker('BTC/USDT')['ask']
-        eth_btc_bid = exchange.fetch_ticker('ETH/BTC')['bid']
-        eth_bid = exchange.fetch_ticker('ETH/USDT')['bid']
+        btc_ticker = exchange.fetch_ticker('BTC/USDT')
+        eth_ticker = exchange.fetch_ticker('ETH/USDT')
+        eth_btc_ticker = exchange.fetch_ticker('ETH/BTC')
         
-        raw_return = (1 / btc_ask) / (1 / eth_btc_bid) * eth_bid
-        net_return = raw_return * (1 - TOTAL_FEES)
+        p_btc_usdt = btc_ticker['ask']        
+        p_eth_btc = eth_btc_ticker['bid']     
+        p_eth_usdt = eth_ticker['bid']        
         
-        print(f"🔄 فحص مجاني | BTC: {btc_ask:.1f} | العائد الصافي: {net_return:.5f}")
+        raw_return = (1 / p_btc_usdt) / p_eth_btc * p_eth_usdt
+        total_fees = fee_rate * 3
+        net_return_rate = raw_return - total_fees
         
-        if net_return > 1.0001: 
-            profit_percent = (net_return - 1) * 100
-            old_balance = USDT_BALANCE
-            USDT_BALANCE = USDT_BALANCE * net_return
-            print(f"🚨 [اقتناص فرصة ربح حقيقية in السوق!]")
-            print(f"📈 النسبة: +{profit_percent:.4f}% | الرصيد: {USDT_BALANCE:.2f} USDT")
-            print("-" * 40)
+        # كلمة flush=True هنا تجبر السيرفر على إظهار السعر فوراً على شاشتك دون تعليق
+        print(f"🔄 فحص حي | BTC: ${p_btc_usdt:.1f} | العائد الصافي للدورة: {net_return_rate:.5f}", flush=True)
+        
+        if net_return_rate > 1.0001:
+            total_opportunities += 1
+            successful_trades += 1
+            
+            trade_amount = demo_balance * 0.50
+            profit = trade_amount * (net_return_rate - 1)
+            demo_balance += profit
+            
+            print(f"\n🚨 [اقتناص فرصة ربح حقيقية!] | صفقة رقم: {successful_trades} | الرصيد الحالي: ${demo_balance:.2f}\n", flush=True)
             
     except Exception as e:
         pass
