@@ -1,79 +1,106 @@
-
-import time
-import ccxt
+import asyncio
+import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
-import os  # تم استيراده لقراءة منفذ ريندر تلقائياً
+import ccxt.pro as ccxtpro  # المكتبة الاحترافية للبث الحي عبر WebSocket
 
-# 1. خادم الويب الأساسي لإرضاء منصة ريندر وتجنب توقف السيرفر
+# 1. خادم الويب الأساسي لإبقاء منصة ريندر مستيقظة
 class SimpleWeb(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html; charset=utf-8")
         self.end_headers()
-        self.wfile.write(b"Bot is active and logging!")
+        self.wfile.write(b"HFT Arbitrage Bot is active and streaming via WebSockets!")
     def log_message(self, format, *args): 
         return
 
-# جلب المنفذ من ريندر تلقائياً، وإذا لم يجده يستخدم 10000 كافتراضي
 PORT = int(os.environ.get('PORT', 10000))
 
-def run_server():
+def start_web_server():
     server = HTTPServer(('0.0.0.0', PORT), SimpleWeb)
-    print(f"🌍 Web server running on port {PORT}")
     server.serve_forever()
 
-# تشغيل خادم الويب في خلفية الكود
-threading.Thread(target=run_server, daemon=True).start()
+# تشغيل خادم الويب في خيط مستقل لمنع تعارض سرعة البوت
+threading.Thread(target=start_web_server, daemon=True).start()
 
-# 2. إعداد الاتصال ببينانس والمحفظة
-exchange = ccxt.binance()
+# 2. إعداد الحساب والمحاكاة الافتراضية
+# قمنا بتغيير المنصة إلى Bybit وتفعيل بروتوكول الـ Pro (WebSockets)
+exchange = ccxtpro.bybit({'enableRateLimit': False}) 
+
 demo_balance = 1000.0  
-fee_rate = 0.00075     
+fee_rate = 0.0006  # رسوم الميكر/تيكر العادية في Bybit (غالباً أقل من بينانس)
 total_opportunities = 0
 
-# كتابة السطر الترحيبي الأول في ملف السجل
-with open("log.txt", "w", encoding="utf-8") as f:
-    f.write("📐 تم بدء تشغيل محاكي المراجحة المثلثية الحي...\n")
-    f.write(f"💰 الرصيد الابتدائي المحفوظ: ${demo_balance:.2f}\n")
-    f.write("-" * 60 + "\n")
+# مخزن مؤقت لحفظ الأسعار في الذاكرة لسرعة ميكرو ثانية
+shared_ticker_data = {
+    'BTC/USDT': None,
+    'ETH/USDT': None,
+    'ETH/BTC': None
+}
 
-# 3. فحص السوق وحفظ البيانات فوراً في ملف log.txt
-while True:
-    try:
-        btc = exchange.fetch_ticker('BTC/USDT')
-        eth = exchange.fetch_ticker('ETH/USDT')
-        eth_btc = exchange.fetch_ticker('ETH/BTC')
-        
-        p_btc_usdt = btc['ask']        
-        p_eth_btc = eth_btc['bid']     
-        
-        # تــــم الـتـصـحـيـح هـنـا: استخدام المتغير الصحيح eth بدلاً من eth_ticker
-        p_eth_usdt = eth['bid']
-        
-        raw_return = (1 / p_btc_usdt) / p_eth_btc * p_eth_usdt
-        net_return_rate = raw_return - (fee_rate * 3)
-        
-        # حفظ الفحص الحالي في المستند النصي ول LOG المنصة لترى الحركة
-        log_line = f"🔄 فحص حي | BTC: ${p_btc_usdt:.1f} | العائد الصافي: {net_return_rate:.5f}\n"
-        print(log_line.strip()) # يطبع في الـ Application logs على ريندر مباشرة
-        
-        with open("log.txt", "a", encoding="utf-8") as f:
-            f.write(log_line)
+# 3. دالة معالجة وفحص المراجحة المثلثية بسرعة البرق
+async def analyze_arbitrage():
+    global demo_balance, total_opportunities
+    
+    while True:
+        try:
+            # التأكد من أن جميع الأزواج استقبلت أسعارها الأولى
+            if not all(shared_ticker_data.values()):
+                await asyncio.sleep(0.01)
+                continue
             
-        if net_return_rate > 1.0001:
-            total_opportunities += 1
-            trade_amount = demo_balance * 0.50
-            profit = trade_amount * (net_return_rate - 1)
-            demo_balance += profit
+            p_btc_usdt = shared_ticker_data['BTC/USDT']['ask']
+            p_eth_btc = shared_ticker_data['ETH/BTC']['bid']
+            p_eth_usdt = shared_ticker_data['ETH/USDT']['bid']
             
-            profit_line = f"\n🚨 [اقتناص فرصة ربح!] | صفقة رقم: {total_opportunities} | الرصيد الحالي: ${demo_balance:.2f}\n\n"
-            print(profit_line.strip())
-            with open("log.txt", "a", encoding="utf-8") as f:
-                f.write(profit_line)
+            if not p_btc_usdt or not p_eth_btc or not p_eth_usdt:
+                continue
                 
-    except Exception as e:
-        # طباعة الخطأ في سجلات ريندر بدلاً من تجاوزه بصمت لتعرف إن واجهتك مشكلة اتصال بالإنترنت
-        print(f"⚠️ خطأ أثناء الفحص: {e}")
-        
-    time.sleep(3)
+            # معادلة المراجحة المثلثية في الذاكرة (RAM)
+            raw_return = (1 / p_btc_usdt) / p_eth_btc * p_eth_usdt
+            net_return_rate = raw_return - (fee_rate * 3)
+            
+            # طباعة الفحص بسرعة البرق في السجلات
+            print(f"⚡ [بث حي] العائد الصافي: {net_return_rate:.5f} | BTC: ${p_btc_usdt:.1f}", flush=True)
+            
+            if net_return_rate > 1.0001:
+                total_opportunities += 1
+                trade_amount = demo_balance * 0.50
+                profit = trade_amount * (net_return_rate - 1)
+                demo_balance += profit
+                
+                print(f"\n🚨 [اقتناص فرصة بلمح البصر!] | صفقة: {total_opportunities} | الرصيد: ${demo_balance:.2f}\n", flush=True)
+                
+        except Exception as e:
+            print(f"⚠️ خطأ أثناء التحليل اللحظي: {e}", flush=True)
+            
+        # فحص مستمر بفارق ضئيل جداً لإراحة المعالج (10 ملي ثانية)
+        await asyncio.sleep(0.01)
+
+# 4. دالة استيعاب وتلقي البث الحي لكل زوج عملات بشكل منفصل ومستمر
+async def watch_pair(symbol):
+    print(f"📡 بدء فتح قناة WebSocket للزوج: {symbol}", flush=True)
+    while True:
+        try:
+            # دالة watch_ticker تستمع للبث الحي القادم من Bybit فوراً
+            ticker = await exchange.watch_ticker(symbol)
+            shared_ticker_data[symbol] = ticker
+        except Exception as e:
+            print(f"🚨 خطأ في قناة WebSocket للزوج {symbol}: {e}", flush=True)
+            await asyncio.sleep(1)
+
+# 5. تشغيل المهام غير المتزامنة بالتوازي
+async def main():
+    symbols = ['BTC/USDT', 'ETH/USDT', 'ETH/BTC']
+    
+    # تشغيل قنوات الاستماع للأزواج الثلاثة مع دالة التحليل في نفس الوقت
+    await asyncio.gather(
+        watch_pair(symbols[0]),
+        watch_pair(symbols[1]),
+        watch_pair(symbols[2]),
+        analyze_arbitrage()
+    )
+
+if __name__ == '__main__':
+    # تشغيل حلقة محرك asyncio الاحترافية
+    asyncio.run(main())
