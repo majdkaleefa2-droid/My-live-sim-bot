@@ -3,19 +3,63 @@ import os
 from http.server import BaseHTTPRequestHandler, HTTPServer
 import threading
 import ccxt.pro as ccxtpro
+import json
+from datetime import datetime
 
-# 1. خادم ويب متوافق تماماً مع ريندر و Cron-Job
+# مخزن ذاكرة مركزي لحفظ الفرص المقتنصة فقط لمراجعتها لاحقاً
+captured_opportunities = []
+
+# 1. خادم ويب ذكي يعرض تقرير الفرص المقتنصة مباشرة في المتصفح
 class SimpleWeb(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.send_header("Content-type", "text/html; charset=utf-8")
         self.end_headers()
-        self.wfile.write(b"OK")  # رد بسيط وسريع جداً لإغلاق الطلب فوراً
+        
+        # بناء صفحة ويب بسيطة ومريحة للمراجعة من الهاتف
+        html = """
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>تقرير المراجحة المثلثية</title>
+            <style>
+                body { font-family: Arial, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
+                table { width: 100%; max-width: 600px; margin: 20px auto; border-collapse: collapse; background: #1e1e1e; }
+                th, td { padding: 12px; border: 1px solid #333; text-align: center; }
+                th { background: #ff9800; color: #000; }
+                .no-data { color: #888; font-style: italic; }
+            </style>
+        </head>
+        <body>
+            <h2>📊 رادار المراجحة المثلثية الحي - تقرير الفرص</h2>
+            <p>حالة البوت: <span style="color:#4caf50; font-weight:bold;">نشط ويعمل ⚡</span></p>
+            <table>
+                <tr>
+                    <th>رقم الصفقة</th>
+                    <th>التوقيت</th>
+                    <th>العائد الصافي</th>
+                    <th>الرصيد الحالي</th>
+                </tr>
+        """
+        
+        if not captured_opportunities:
+            html += "<tr><td colspan='4' class='no-data'>لم يتم اقتناص أي فرصة بعد، الرادار يبحث بالثانية...</td></tr>"
+        else:
+            for opp in captured_opportunities:
+                html += f"<tr><td>{opp['id']}</td><td>{opp['time']}</td><td>{opp['return']:.5f}</td><td>${opp['balance']:.2f}</td></tr>"
+                
+        html += """
+            </table>
+        </body>
+        </html>
+        """
+        self.wfile.write(html.encode('utf-8'))
+        
     def log_message(self, format, *args): 
         return
 
 PORT = int(os.environ.get('PORT', 10000))
-
 def start_web_server():
     server = HTTPServer(('0.0.0.0', PORT), SimpleWeb)
     server.serve_forever()
@@ -34,14 +78,13 @@ shared_ticker_data = {
     'ETH/BTC': None
 }
 
-# 3. دالة الفحص المستقرة (تعديل الأمان والسرعة)
+# 3. دالة الفحص المستقرة والاقتناص اللحظي
 async def analyze_arbitrage():
     global demo_balance, total_opportunities
     
     while True:
         try:
             if not all(shared_ticker_data.values()):
-                # تم زيادة وقت الانتظار الأولي لضمان استقرار قنوات البث
                 await asyncio.sleep(1)
                 continue
             
@@ -62,16 +105,24 @@ async def analyze_arbitrage():
                 trade_amount = demo_balance * 0.50
                 profit = trade_amount * (net_return_rate - 1)
                 demo_balance += profit
+                
+                # حفظ الفرصة فوراً في جدول الذاكرة للمراجعة لاحقاً
+                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                captured_opportunities.append({
+                    'id': total_opportunities,
+                    'time': current_time,
+                    'return': net_return_rate,
+                    'balance': demo_balance
+                })
+                
                 print(f"\n🚨 [اقتناص فرصة] | صفقة: {total_opportunities} | الرصيد: ${demo_balance:.2f}\n", flush=True)
                 
         except Exception as e:
             print(f"⚠️ خطأ في التحليل: {e}", flush=True)
             
-        # تـــم الـتـعـديل هـنـا: رفع وقت الانتظار إلى (1 ثانية) بدلاً من (10 ملي ثانية) 
-        # هذا يمنع السيرفر المجاني من حظر الكود بسبب الضغط العالي ويضمن استمراره للأبد
         await asyncio.sleep(1)
 
-# 4. دالة الاستماع المستمر للبث
+# 4. دالة استيعاب البث
 async def watch_pair(symbol):
     print(f"📡 فتح قناة WebSocket للزوج: {symbol}", flush=True)
     while True:
@@ -80,7 +131,6 @@ async def watch_pair(symbol):
             shared_ticker_data[symbol] = ticker
         except Exception as e:
             print(f"🚨 خطأ في قناة {symbol}: {e}", flush=True)
-            # انتظار أطول عند حدوث خطأ شبكة لإعادة الاتصال الآمن
             await asyncio.sleep(5)
 
 async def main():
