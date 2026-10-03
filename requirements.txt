@@ -1,1 +1,4 @@
 ccxt
+python-binance
+asyncio
+websokets
