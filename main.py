@@ -13,16 +13,18 @@ def initialize_bot():
         print("خطأ: لم يتم العثور على مفاتيح API في إعدادات Render. يرجى التحقق من أسماء المتغيرات.")
         return None
 
-    # 2. تعريف كائن المنصة وتوجيه الإعدادات برمجياً للـ Demo بشكل قاطع
-    # تم إلغاء set_sandbox_mode واستبدالها بالتوجيه الفعلي لـ api-demo
+    # 2. تعريف كائن المنصة وتثبيت خيارات التداول
     exchange = ccxt.bybit({
         'apiKey': api_key,
         'secret': api_secret,
         'options': {
-            'enableDemoTrading': True,  # التفعيل الإجباري لحساب الديمو المدمج الموثق
             'defaultType': 'swap',      # توجيه الصفقات تلقائياً لعقود المشتقات والرافعة المالية
         }
     })
+
+    # 3. الدمج البرمجي القاطع لتوجيه الطلبات إلى خادم ://bybit.com المدمج
+    exchange.set_sandbox_mode(True)
+    exchange.options['enableDemoTrading'] = True
 
     try:
         # فحص الاتصال وسحب الأرصدة الحية لحساب الديمو لإثبات نجاح الربط
@@ -41,7 +43,7 @@ def start_trading_loop(exchange):
         
     print("🚀 بدء حلقة التداول اللحظي عالي التردد (Turbo HFT Loop)...")
     
-    # أزواج العملات التي يقرأها البوت ويحللها حية من السوق
+    # أزواج العملات التي يقرأها البوت ويحللها حية من السوق التجريبي
     symbols = ['BTC/USDT:USDT', 'NEAR/USDT:USDT', 'LINK/USDT:USDT']
     
     while True:
