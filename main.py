@@ -3,33 +3,37 @@ import time
 import ccxt
 
 def initialize_bot():
-    print("... جاري تهيئة البوت والاتصال الآمن بمنصة Bybit التجريبية (Demo V5)")
+    print("... جاري تهيئة البوت والاتصال بحساب Bybit Demo المدمج (Mainnet V5)")
     
-    # 1. جلب المفاتيح المشفرة والمحفوظة في إعدادات Render
+    # 1. جلب المفاتيح من إعدادات Render
     api_key = os.environ.get('BYBIT_API_KEY')
     api_secret = os.environ.get('BYBIT_API_SECRET')
     
     if not api_key or not api_secret:
-        print("خطأ: لم يتم العثور على مفاتيح API في إعدادات Render. يرجى التحقق من أسماء المتغيرات.")
+        print("خطأ: لم يتم العثور على مفاتيح API في إعدادات Render.")
         return None
 
-    # 2. تعريف كائن المنصة وتثبيت خيارات التداول
+    # 2. إجبار المكتبة على توجيه الاتصال مباشرة لخوادم الديمو
+    # بدون استخدام set_sandbox_mode لتجنب تحويل الرابط إلى testnet.bybit.com
     exchange = ccxt.bybit({
         'apiKey': api_key,
         'secret': api_secret,
+        'urls': {
+            'api': {
+                'public': 'https://api-demo.bybit.com',
+                'private': 'https://api-demo.bybit.com',
+            }
+        },
         'options': {
-            'defaultType': 'swap',      # توجيه الصفقات تلقائياً لعقود المشتقات والرافعة المالية
+            'enableDemoTrading': True,  # التفعيل البرمجي المباشر للديمو
+            'defaultType': 'swap',      # تداول العقود الآجلة
         }
     })
 
-    # 3. الدمج البرمجي القاطع لتوجيه الطلبات إلى خادم ://bybit.com المدمج
-    exchange.set_sandbox_mode(True)
-    exchange.options['enableDemoTrading'] = True
-
     try:
-        # فحص الاتصال وسحب الأرصدة الحية لحساب الديمو لإثبات نجاح الربط
+        # فحص الاتصال وقراءة رصيد حساب الديمو الفعلي
         balance = exchange.fetch_balance()
-        print("🎉 تم الاتصال والربط بنجاح كامل مع حساب Bybit Demo الثابت!")
+        print("🎉 تم الاتصال والربط بنجاح كامل مع حساب Bybit Demo!")
         print("💰 رصيدك التجريبي المتاح حالياً هو:")
         print(balance['total'])
         return exchange
@@ -42,9 +46,7 @@ def start_trading_loop(exchange):
         return
         
     print("🚀 بدء حلقة التداول اللحظي عالي التردد (Turbo HFT Loop)...")
-    
-    # أزواج العملات التي يقرأها البوت ويحللها حية من السوق التجريبي
-    symbols = ['BTC/USDT:USDT', 'NEAR/USDT:USDT', 'LINK/USDT:USDT']
+    symbols = ['BTC/USDT:USDT', 'NEAR/USDT:USDT']
     
     while True:
         try:
@@ -52,9 +54,6 @@ def start_trading_loop(exchange):
                 ticker = exchange.fetch_ticker(symbol)
                 print(f"🔹 سعر Bybit اللحظي لـ {symbol}: {ticker['last']}")
                 
-                # [هنا يوضع منطق استراتيجيتك البرمجية لفتح وإغلاق الصفقات تلقائياً]
-                
-            # فاصل زمني (1 ثانية) لحماية السيرفر من الحظر وضمان استقرار جلب البيانات
             time.sleep(1) 
             
         except Exception as e:
