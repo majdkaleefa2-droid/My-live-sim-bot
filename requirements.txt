@@ -2,3 +2,4 @@ ccxt
 python-binance
 asyncio
 websockets
+flask
