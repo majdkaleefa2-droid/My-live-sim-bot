@@ -1,3 +1,4 @@
 python-binance
+asyncio
+websockets
 flask
-requests
