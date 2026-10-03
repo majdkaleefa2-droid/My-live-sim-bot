@@ -1,12 +1,14 @@
 import os
 import asyncio
 import threading
+import time
+import requests
 from flask import Flask
 from binance import AsyncClient, BinanceSocketManager
 
 app = Flask(__name__)
 
-# لوحة القيادة المالية المتطورة لتتبع أداء الـ 4 مثلثات معاً
+# لوحة القيادة المتطورة والمحمية V3
 bot_stats = {
     "status": "⚙️ Booting HFT Core V3...",
     "total_trades": 0,
@@ -35,6 +37,7 @@ def home():
             <div class="dashboard">
                 <h2>📊 لوحة القيادة المؤسساتية - HFT Core V3</h2>
                 <p><b>حالة نظام الرادار:</b> <span class="profit">{bot_stats['status']}</span></p>
+                <div style="font-size:11px; color:#aaa; margin-bottom:10px;">⏰ درع الاستيقاظ النشط (Anti-Sleep): شغال 🟢</div>
                 <hr style="border-color:#222;">
                 <p>💵 رصيد المحفظة الحالي: <span class="metric">{bot_stats['simulated_balance_usdt']:.2f} USDT</span></p>
                 <p>📈 صافي أرباح المحرك الصافية: <span class="{'profit' if bot_stats['net_profit_usdt'] >= 0 else 'danger'}">{bot_stats['net_profit_usdt']:.4f} USDT</span></p>
@@ -47,6 +50,19 @@ def home():
     """
     return html
 
+# --- ⏰ دالة إيقاظ ريندر ومنعه من النوم تلقائياً ---
+def wake_up_render():
+    """تقوم بطلب رابط الحساب كل 10 دقائق لإبقاء السيرفر مستيقظاً دائماً"""
+    time.sleep(30) # انتظر حتى يكتمل بناء السيرفر أولاً
+    url = "https://onrender.com"
+    while True:
+        try:
+            requests.get(url, timeout=10)
+            print("📡 [Anti-Sleep] تم إرسال إشارة إيقاظ بنجاح للسيرفر لمنعه من الخمول.")
+        except Exception as e:
+            print(f"⚠️ [Anti-Sleep] فشل إرسال إشارة الإيقاظ مؤقتاً: {e}")
+        time.sleep(600) # كرر العملية كل 10 دقائق (600 ثانية)
+
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, use_reloader=False)
@@ -54,7 +70,6 @@ def run_flask():
 API_KEY = os.getenv('BINANCE_API_KEY')
 SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
 
-# مراقبة جميع الأزواج المطلوبة لتغطية الـ 4 مثلثات معاً في نفس أجزاء الثانية
 ALL_PAIRS = ["BTCUSDT", "DOTBTC", "DOTUSDT", "SOLBTC", "SOLUSDT", "XRPBTC", "XRPUSDT", "ETHBTC", "ETHUSDT"]
 streams = [f"{pair.lower()}@ticker" for pair in ALL_PAIRS]
 
@@ -62,31 +77,27 @@ prices = {pair: 0.0 for pair in ALL_PAIRS}
 trade_lock = False
 
 async def evaluate_triangle(name, p_btc, p_alt_btc, p_alt_usdt):
-    """
-    📊 الفحص الحسابي المتطور للمثلث مع تفعيل درع الأمان والانزلاق السعري
-    """
     global trade_lock
     if p_btc == 0 or p_alt_btc == 0 or p_alt_usdt == 0 or trade_lock:
         return
 
-    # 1. حساب العائد الإجمالي الأولي للمثلث
     simulated_return = (1.0 / p_btc) / p_alt_btc * p_alt_usdt
     
-    # 2. احتساب عمولة بينانس الصارمة (0.1% * 3 صفقة = 0.3%) + خصم انزلاق سعري أمان لحساب تأخر التنفيذ (0.05%)
+    # درع الأمان: خصم العمولات (0.3%) + هامش انزلاق سعر أمان (0.05%)
     total_deductions = 0.003 + 0.0005 
     net_return = simulated_return - total_deductions
     
-    trade_size = 1000.0  # حجم رأس مال محاكاة الصفقة
+    trade_size = 1000.0
     profit_usdt = (net_return - 1.0) * trade_size
     
-    # 🎯 درع الأمان الفولاذي: لا يدخل إلا إذا كان الربح صافياً وموجباً بعد خصم العمولات والانزلاق بالكامل
+    # 🎯 لا يمر إلا الربح الصافي الفعلي بعد العمولات
     if profit_usdt > 0.0:
         trade_lock = True
         bot_stats["total_trades"] += 1
         bot_stats["simulated_balance_usdt"] += profit_usdt
         bot_stats["net_profit_usdt"] += profit_usdt
         bot_stats["last_trade"] = f"✨ قنص مؤسساتي ناجح بمثلث [{name}]! الربح الصافي: +{profit_usdt:.4f} USDT"
-        await asyncio.sleep(0.05)  # مهلة قفل الملي ثانية لحماية التنفيذ
+        await asyncio.sleep(0.05)
         trade_lock = False
 
 async def run_hft_enterprise_core():
@@ -110,20 +121,15 @@ async def run_hft_enterprise_core():
                     
                     if pair_name in prices:
                         prices[pair_name] = current_close
-                        
-                        # سحب الأسعار اللحظية بالملي ثانية لتغذية الـ 4 مثلثات معاً بشكل متوازٍ
                         p_btc = prices["BTCUSDT"]
                         
-                        # فحص مثلث الـ DOT
+                        # فحص الـ 4 مثلثات الحارة معاً بالملي ثانية
                         asyncio.create_task(evaluate_triangle("BTC-DOT", p_btc, prices["DOTBTC"], prices["DOTUSDT"]))
-                        # فحص مثلث الـ SOL
                         asyncio.create_task(evaluate_triangle("BTC-SOL", p_btc, prices["SOLBTC"], prices["SOLUSDT"]))
-                        # فحص مثلث الـ XRP
                         asyncio.create_task(evaluate_triangle("BTC-XRP", p_btc, prices["XRPBTC"], prices["XRPUSDT"]))
-                        # فحص مثلث الـ ETH
                         asyncio.create_task(evaluate_triangle("BTC-ETH", p_btc, prices["ETHBTC"], prices["ETHUSDT"]))
             except Exception:
-                await asyncio.sleep(0.001)  # تسريع الاستجابة لأعلى دقة ملي ثانية
+                await asyncio.sleep(0.001)
 
 def start_enterprise_loop():
     loop = asyncio.new_event_loop()
@@ -131,9 +137,13 @@ def start_enterprise_loop():
     loop.run_until_complete(run_hft_enterprise_core())
 
 if __name__ == "__main__":
-    # 1. تشغيل خادم ويب Flask في خلفية معزولة
+    # 1. تشغيل خادم ويب Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
-    # 2. تشغيل محرك أجزاء الثانية المؤسساتي الخارق في الخط الرئيسي
+    # 2. تشغيل درع إيقاظ ريندر ومنعه من النوم تلقائياً
+    anti_sleep_thread = threading.Thread(target=wake_up_render, daemon=True)
+    anti_sleep_thread.start()
+    
+    # 3. تشغيل محرك أجزاء الثانية المؤسساتي الخارق
     start_enterprise_loop()
