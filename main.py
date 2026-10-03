@@ -81,11 +81,8 @@ async def execute_virtual_arbitrage(p1, p2, p3):
     trade_size = 1000.0
     profit_usdt = (net_return - 1.0) * trade_size
     
-    # 🎯 شرط الدخول: نقنص فقط إذا كان الربح موجباً بعد خصم العمولات الحقيقية
-    python-binance
-asyncio
-websockets
-flask
+    # 🎯 شرط الدخول: نقنص فقط إذا كان الربح موجباً بعد خصم العمولات الحقيقي
+flaskif simulated_return > 1.0000:  # سيقنص فوراً أي فجوة سعرية بمجرد أن تكسر حاجز التعادل
         bot_stats["total_trades"] += 1
         bot_stats["simulated_balance_usdt"] += profit_usdt
         bot_stats["net_profit_usdt"] += profit_usdt
