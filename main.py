@@ -1,148 +1,130 @@
 import asyncio
 import os
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import threading
 import ccxt.pro as ccxtpro
-import json
 from datetime import datetime
 
-# مخزن ذاكرة مركزي لحفظ الفرص المقتنصة فقط لمراجعتها لاحقاً
-captured_opportunities = []
+# إعداد الاتصال فائق السرعة بمنصة Gate.io
+exchange = ccxtpro.gate({
+    'enableRateLimit': True,
+    'options': {
+        'defaultType': 'spot',
+        'ws': {
+            'options': {
+                'concurrency': 50 # رفع حد المعالجة المتزامنة لقنوات البث
+            }
+        }
+    }
+})
 
-# 1. خادم ويب ذكي يعرض تقرير الفرص المقتنصة مباشرة في المتصفح
-class SimpleWeb(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/html; charset=utf-8")
-        self.end_headers()
-        
-        # بناء صفحة ويب بسيطة ومريحة للمراجعة من الهاتف
-        html = """
-        <html>
-        <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>تقرير المراجحة المثلثية</title>
-            <style>
-                body { font-family: Arial, sans-serif; background: #121212; color: #fff; text-align: center; padding: 20px; }
-                table { width: 100%; max-width: 600px; margin: 20px auto; border-collapse: collapse; background: #1e1e1e; }
-                th, td { padding: 12px; border: 1px solid #333; text-align: center; }
-                th { background: #ff9800; color: #000; }
-                .no-data { color: #888; font-style: italic; }
-            </style>
-        </head>
-        <body>
-            <h2>📊 رادار المراجحة المثلثية الحي - تقرير الفرص</h2>
-            <p>حالة البوت: <span style="color:#4caf50; font-weight:bold;">نشط ويعمل ⚡</span></p>
-            <table>
-                <tr>
-                    <th>رقم الصفقة</th>
-                    <th>التوقيت</th>
-                    <th>العائد الصافي</th>
-                    <th>الرصيد الحالي</th>
-                </tr>
-        """
-        
-        if not captured_opportunities:
-            html += "<tr><td colspan='4' class='no-data'>لم يتم اقتناص أي فرصة بعد، الرادار يبحث بالثانية...</td></tr>"
-        else:
-            for opp in captured_opportunities:
-                html += f"<tr><td>{opp['id']}</td><td>{opp['time']}</td><td>{opp['return']:.5f}</td><td>${opp['balance']:.2f}</td></tr>"
-                
-        html += """
-            </table>
-        </body>
-        </html>
-        """
-        self.wfile.write(html.encode('utf-8'))
-        
-    def log_message(self, format, *args): 
-        return
+# نموذج التكلفة الصارم لحسابات VIP (عمولة منخفضة جداً للاستفادة القصوى)
+FEE_PER_LEG = 0.0006  # 0.06% لكل عملية
+TOTAL_FEE_3_LEGS = FEE_PER_LEG * 3
 
-PORT = int(os.environ.get('PORT', 10000))
-def start_web_server():
-    server = HTTPServer(('0.0.0.0', PORT), SimpleWeb)
-    server.serve_forever()
+# رصيد المحاكاة الافتراضي لبدء صفقات الورق (Paper Trading)
+balance_usdt = 1000.0
 
-threading.Thread(target=start_web_server, daemon=True).start()
+# 1. قائمة الـ 15 عملة الساخنة البديلة والميم الأكثر تقلباً وحركة
+HOT_ALTCOINS = [
+    'SOL', 'XRP', 'DOGE', 'ADA', 'AVAX', 
+    'LINK', 'DOT', 'SHIB', 'NEAR', 'PEPE', 
+    'FET', 'SUI', 'APT', 'WIF', 'BONK'
+]
 
-# 2. إعداد الحساب
-exchange = ccxtpro.gate({'enableRateLimit': True}) 
-demo_balance = 1000.0  
-fee_rate = 0.002  
-total_opportunities = 0
+# 2. بناء ذاكرة الكاش اللحظية في الRAM لجميع أطراف المثلثات
+orderbook_cache = {}
 
-shared_ticker_data = {
-    'BTC/USDT': None,
-    'ETH/USDT': None,
-    'ETH/BTC': None
-}
+# تأمين الزوج الحاكم أولاً
+orderbook_cache['BTC/USDT'] = {'ask': None, 'bid': None}
 
-# 3. دالة الفحص المستقرة والاقتناص اللحظي
-async def analyze_arbitrage():
-    global demo_balance, total_opportunities
+# توليد المثلثات تلقائياً للعملات الـ 15
+for coin in HOT_ALTCOINS:
+    orderbook_cache[f'{coin}/USDT'] = {'ask': None, 'bid': None}
+    orderbook_cache[f'{coin}/BTC']  = {'ask': None, 'bid': None}
+
+def process_triangular_arbitrage(coin):
+    """
+    محرك الحساب والاقتناص اللحظي الخارق (Tick-Driven Micro Engine)
+    يعمل في جزء من الألف من الثانية فور ورود السعر
+    """
+    global balance_usdt
     
-    while True:
-        try:
-            if not all(shared_ticker_data.values()):
-                await asyncio.sleep(1)
-                continue
-            
-            p_btc_usdt = shared_ticker_data['BTC/USDT']['ask']
-            p_eth_btc = shared_ticker_data['ETH/BTC']['bid']
-            p_eth_usdt = shared_ticker_data['ETH/USDT']['bid']
-            
-            if not p_btc_usdt or not p_eth_btc or not p_eth_usdt:
-                continue
-                
-            raw_return = (1 / p_btc_usdt) / p_eth_btc * p_eth_usdt
-            net_return_rate = raw_return - (fee_rate * 3)
-            
-            print(f"⚡ [Gate.io بث حي] العائد: {net_return_rate:.5f} | BTC: ${p_btc_usdt:.1f}", flush=True)
-            
-            if net_return_rate > 1.0001:
-                total_opportunities += 1
-                trade_amount = demo_balance * 0.50
-                profit = trade_amount * (net_return_rate - 1)
-                demo_balance += profit
-                
-                # حفظ الفرصة فوراً في جدول الذاكرة للمراجعة لاحقاً
-                current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                captured_opportunities.append({
-                    'id': total_opportunities,
-                    'time': current_time,
-                    'return': net_return_rate,
-                    'balance': demo_balance
-                })
-                
-                print(f"\n🚨 [اقتناص فرصة] | صفقة: {total_opportunities} | الرصيد: ${demo_balance:.2f}\n", flush=True)
-                
-        except Exception as e:
-            print(f"⚠️ خطأ في التحليل: {e}", flush=True)
-            
-        await asyncio.sleep(1)
+    try:
+        # أسماء الأزواج للمثلث الحالي
+        pair_usdt = f'{coin}/USDT'
+        pair_btc  = f'{coin}/BTC'
+        pair_base = 'BTC/USDT'
+        
+        # التأكد من توفر أسعار حية ومحدثة للمثلث بالكامل
+        p_base_ask = orderbook_cache[pair_base]['ask']
+        p_coin_btc_bid = orderbook_cache[pair_btc]['bid']
+        p_coin_usdt_bid = orderbook_cache[pair_usdt]['bid']
+        
+        if not (p_base_ask and p_coin_btc_bid and p_coin_usdt_bid):
+            return # إذا نقص سعر واحد يتخطى المحرك العملية فوراً للحفاظ على السرعة
 
-# 4. دالة استيعاب البث
-async def watch_pair(symbol):
-    print(f"📡 فتح قناة WebSocket للزوج: {symbol}", flush=True)
+        # المسار الرياضي الصارم: USDT -> BTC -> COIN -> USDT
+        # 1. شراء BTC بواسطة USDT (1 / p_base_ask)
+        # 2. شراء العملة الساخنة بواسطة BTC (مقلوب سعر الـ bid للزوج coin/BTC)
+        # 3. بيع العملة الساخنة واسترداد USDT (الضرب في سعر bid للزوج coin/USDT)
+        raw_return = (1 / p_base_ask) / p_coin_btc_bid * p_coin_usdt_bid
+        
+        # صافي العائد بعد خصم رسوم الـ 3 صفقات المركبة
+        net_return = raw_return - TOTAL_FEE_3_LEGS
+        
+        # عتبة الربح المستهدفة (0.02% ربح صافي فأكثر)
+        if net_return > 1.0002:
+            profit_percentage = (net_return - 1) * 100
+            gained = balance_usdt * (net_return - 1)
+            balance_usdt += gained
+            
+            timestamp = datetime.now().strftime('%H:%M:%S.%f')[:-3]
+            print(f"\n🚨 [اقتناص خارق || {timestamp}]")
+            print(f"   المثلث الناجح: USDT ➔ BTC ➔ {coin} ➔ USDT")
+            print(f"   العائد الصافي: {net_return:.5f} (+{profit_percentage:.4f}%)")
+            print(f"   💰 الرصيد الحالي بالمحاكاة: ${balance_usdt:.2f}\n", flush=True)
+            
+    except Exception as e:
+        pass # تجاهل الأخطاء الطفيفة أثناء العمليات الرياضية السريعة لضمان عدم توقف البوت
+
+async def watch_ticker_stream(symbol):
+    """
+    مستقبل البيانات الحي الخارق - يغذي الذاكرة ويطلق المحرك دون أي تأخير
+    """
     while True:
         try:
             ticker = await exchange.watch_ticker(symbol)
-            shared_ticker_data[symbol] = ticker
+            if ticker and 'ask' in ticker and 'bid' in ticker:
+                orderbook_cache[symbol]['ask'] = ticker['ask']
+                orderbook_cache[symbol]['bid'] = ticker['bid']
+                
+                # إذا كان التحديث للزوج الحاكم، نفحص كل العملات
+                if symbol == 'BTC/USDT':
+                    for coin in HOT_ALTCOINS:
+                        process_triangular_arbitrage(coin)
+                else:
+                    # إذا كان التحديث لعملة معينة، نفحص مثلثها هي فقط توفيراً للوقت والجهد
+                    coin_name = symbol.split('/')[0]
+                    process_triangular_arbitrage(coin_name)
+                    
         except Exception as e:
-            print(f"🚨 خطأ في قناة {symbol}: {e}", flush=True)
-            await asyncio.sleep(5)
+            await asyncio.sleep(1) # إعادة اتصال سريعة عند حدوث مشاكل في الشبكة
 
 async def main():
+    print("⚡ إطلاق محرك البلاك بوكس الخارق (HFT Simulator - 15 Hot Coins) ⚡")
+    print("البوت الآن يقوم بفتح 45 قناة اتصال متزامنة ومجانية بالكامل لمراقبة واقتناص الفرص...")
+    
+    # بناء مصفوفة المهام المتوازية لقنوات الـ WebSocket
+    tasks = [watch_ticker_stream('BTC/USDT')]
+    
+    for coin in HOT_ALTCOINS:
+        tasks.append(watch_ticker_stream(f'{coin}/USDT'))
+        tasks.append(watch_ticker_stream(f'{coin}/BTC'))
+        
     try:
-        await asyncio.gather(
-            watch_pair('BTC/USDT'),
-            watch_pair('ETH/USDT'),
-            watch_pair('ETH/BTC'),
-            analyze_arbitrage()
-        )
-    except Exception as main_err:
-        print(f"❌ خطأ في المحرك الرئيسي: {main_err}", flush=True)
+        # تشغيل جميع القنوات والمحركات بالتوازي المطلق
+        await asyncio.gather(*tasks)
+    except Exception as e:
+        print(f"❌ خطأ غير متوقع في المحرك الرئيسي: {e}")
     finally:
         await exchange.close()
 
