@@ -1,5 +1,7 @@
-ccxt
 python-binance
 asyncio
 websockets
 flask
+flask-socketio
+gevent
+gevent-websocket
