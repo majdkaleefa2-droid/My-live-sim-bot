@@ -1,66 +1,83 @@
 import os
-import time
-import ccxt
+import asyncio
+from binance import AsyncClient, BinanceSocketManager
+from binance.exceptions import BinanceAPIException
 
-def initialize_bot():
-    print("... جاري تهيئة البوت والاتصال بحساب Bybit Demo المدمج (Mainnet V5)")
+# 1. جلب المفاتيح بشكل آمن من بيئة عمل Render
+API_KEY = os.getenv('BINANCE_API_KEY')
+SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
+
+if not API_KEY or not SECRET_KEY:
+    raise ValueError("خطأ: لم يتم العثور على مفاتيح Binance في إعدادات Render!")
+
+# 2. قائمة الـ 15 عملة الساخنة (Hot Coins) مقابل الـ USDT التي اتفقنا على المضاربة عليها
+# يمكنك تعديل أو استبدال أي عملة في القائمة حسب تحديثات السوق الحالية
+HOT_SYMBOLS = [
+    "BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
+    "ADAUSDT", "AVAXUSDT", "DOTUSDT", "LINKUSDT", "MATICUSDT",
+    "DOGEUSDT", "SHIBUSDT", "TRXUSDT", "LTCUSDT", "NEARUSDT"
+]
+
+# تحويل أسماء العملات إلى أحرف صغيرة توافقاً مع شروط الـ WebSocket لبينانس
+streams = [f"{symbol.lower()}@ticker" for symbol in HOT_SYMBOLS]
+
+
+async def process_signal(symbol, current_price, client):
+    """
+    هنا قلب الإستراتيجية والمضاربة بأجزاء الثانية.
+    بما أن الدالة تعمل بنظام Async، فسيتم فحص واتخاذ القرار لكل عملة بشكل منفصل وموازي.
+    """
+    # 💡 مثال إستراتيجيتنا السريعة: (ضع هنا شروط الدخول والخروج الخاصة بك)
+    # سنقوم هنا فقط بطباعة السعر اللحظي المتدفق بأجزاء الثانية للتأكد من عمل البوت
+    print(f"⚡ [تحديث لحظي] العملة: {symbol} | السعر الحالي: {current_price} USDT")
     
-    # 1. جلب المفاتيح من إعدادات Render
-    api_key = os.environ.get('BYBIT_API_KEY')
-    api_secret = os.environ.get('BYBIT_API_SECRET')
+    # مثال على إرسال أمر شراء غير متزامن سريع إذا تحقق شرطك:
+    # try:
+    #     order = await client.create_order(
+    #         symbol=symbol,
+    #         side='BUY',
+    #         type='MARKET',
+    #         quantity=0.001  # احرص على حساب الكمية المناسبة لكل عملة
+    #     )
+    #     print(f"✅ تم تنفيذ أمر شراء سريع لـ {symbol}")
+    # except BinanceAPIException as e:
+    #     print(f"❌ فشل تنفيذ الأمر لـ {symbol}: {e.message}")
+
+
+async def main():
+    print("🚀 بدء تشغيل بوت المضاربة الخاطفة غير المتزامن على Render...")
+    print(f"👀 مراقبة {len(HOT_SYMBOLS)} عملة ساخنة بأجزاء الثانية عبر الـ WebSockets.")
+
+    # إنشاء العميل غير المتزامن وتوجيهه لشبكة الاختبار (Testnet)
+    client = await AsyncClient.create(API_KEY, SECRET_KEY, testnet=True)
+    bm = BinanceSocketManager(client)
     
-    if not api_key or not api_secret:
-        print("خطأ: لم يتم العثور على مفاتيح API في إعدادات Render.")
-        return None
+    # فتح خط بث مباشر متعدد (Multiplex Socket) لمراقبة الـ 15 عملة معاً في نفس خط الاتصال
+    # هذا يمنع تماماً حظر الـ IP لأنه يستهلك طلب واحد فقط بدلاً من آلاف الطلبات
+    multiplex_socket = bm.multiplex_socket(streams)
 
-    # 2. إجبار المكتبة على توجيه الاتصال مباشرة لخوادم الديمو
-    # بدون استخدام set_sandbox_mode لتجنب تحويل الرابط إلى testnet.bybit.com
-    exchange = ccxt.bybit({
-        'apiKey': api_key,
-        'secret': api_secret,
-        'urls': {
-            'api': {
-                'public': 'https://api-demo.bybit.com',
-                'private': 'https://api-demo.bybit.com',
-            }
-        },
-        'options': {
-            'enableDemoTrading': True,  # التفعيل البرمجي المباشر للديمو
-            'defaultType': 'swap',      # تداول العقود الآجلة
-        }
-    })
-
-    try:
-        # فحص الاتصال وقراءة رصيد حساب الديمو الفعلي
-        balance = exchange.fetch_balance()
-        print("🎉 تم الاتصال والربط بنجاح كامل مع حساب Bybit Demo!")
-        print("💰 رصيدك التجريبي المتاح حالياً هو:")
-        print(balance['total'])
-        return exchange
-    except Exception as e:
-        print(f"❌ فشل الاتصال بالمنصة. السبب البرمجي المباشر هو: {e}")
-        return None
-
-def start_trading_loop(exchange):
-    if not exchange:
-        return
-        
-    print("🚀 بدء حلقة التداول اللحظي عالي التردد (Turbo HFT Loop)...")
-    symbols = ['BTC/USDT:USDT', 'NEAR/USDT:USDT']
-    
-    while True:
-        try:
-            for symbol in symbols:
-                ticker = exchange.fetch_ticker(symbol)
-                print(f"🔹 سعر Bybit اللحظي لـ {symbol}: {ticker['last']}")
+    async with multiplex_socket as stream:
+        while True:
+            try:
+                # استقبال البيانات المتدفقة بأجزاء الثانية من بينانس
+                res = await stream.recv()
                 
-            time.sleep(1) 
-            
-        except Exception as e:
-            print(f"⚠️ تنبيه: حدث خطأ مؤقت أثناء قراءة الأسعار: {e}")
-            time.sleep(5)
+                if res and 'data' in res:
+                    data = res['data']
+                    symbol = data['s']        # اسم العملة (مثل BTCUSDT)
+                    current_price = data['c'] # السعر الحالي والإغلاق اللحظي
+                    
+                    # تمرير البيانات فوراً وبشكل موازي لمعالجتها واتخاذ قرار المضاربة
+                    asyncio.create_task(process_signal(symbol, current_price, client))
+                    
+            except Exception as e:
+                print(f"⚠️ خطأ أثناء استقبال بيانات البث: {e}")
+                print("إعادة الاتصال بالبث المباشر خلال 5 ثوانٍ...")
+                await asyncio.sleep(5)
+                
+    # إغلاق الاتصال بأمان عند إيقاف البوت
+    await client.close_connection()
 
 if __name__ == "__main__":
-    exchange_client = initialize_bot()
-    if exchange_client:
-        start_trading_loop(exchange_client)
+    # تشغيل الحلقة اللانهائية غير المتزامنة لضمان استقرار البوت على خوادم Render
+    asyncio.run(main())
