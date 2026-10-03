@@ -1,151 +1,92 @@
 import os
-import asyncio
+import time
 import threading
 from flask import Flask
-from flask_socketio import SocketIO
-from binance import AsyncClient, BinanceSocketManager
+from binance.client import Client
 
-# --- 1. إعداد خادم Flask مع تقنية البث المباشر للشاشة (SocketIO) ---
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'hft_secret!'
-socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins="*")
 
-# ذاكرة سريعة لتخزين الأسعار
-prices = {"BTCUSDT": 0.0, "DOTBTC": 0.0, "DOTUSDT": 0.0}
-trade_lock = False
+# تخزين البيانات لعرضها مباشرة
+radar_data = {
+    "status": "📡 الرادار متصل ويحدث الأسعار تلقائياً غصباً عن السيرفر!",
+    "btc_price": "0.0",
+    "dot_btc": "0.0",
+    "dot_usdt": "0.0",
+    "profit_msg": "🔍 جاري فحص الفجوات السعرية للمثلث الحسابي..."
+}
 
 @app.route('/')
 def home():
-    """واجهة الرادار القديمة باللون الأسود والأسطر المتدفقة حية"""
-    html = """
+    # صفحة HTML بسيطة تحدث نفسها قسرياً كل ثانيتين لجلب الأسعار الجديدة
+    return f"""
     <html>
         <head>
-            <title>HFT V2 - Live Radar</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <script src="https://cloudflare.com"></script>
+            <meta http-equiv="refresh" content="2">
+            <title>HFT V2 - Real Test</title>
             <style>
-                body { font-family: 'Courier New', monospace; background: #0c0c0c; color: #00ff00; padding: 15px; margin: 0; }
-                .header { border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
-                .title { color: #ffcc00; font-weight: bold; font-size: 18px; }
-                #log-container { width: 100%; height: 75vh; overflow-y: auto; background: #111; border: 1px solid #222; padding: 10px; border-radius: 5px; box-sizing: border-box; }
-                .line { margin: 4px 0; font-size: 13px; line-height: 1.4; }
-                .green { color: #00ff00; }
-                .yellow { color: #ffcc00; }
-                .blue { color: #00ccff; }
-                .purple { color: #cc66ff; }
+                body {{ font-family: monospace; background: #0a0a0a; color: #00ff00; padding: 30px; text-align: center; }}
+                .container {{ border: 2px solid #333; padding: 20px; display: inline-block; background: #111; border-radius: 8px; text-align: left; }}
+                h2 {{ color: #ffcc00; text-align: center; }}
+                .price {{ color: #00ffff; }}
             </style>
         </head>
         <body>
-            <div class="header">
-                <div class="title">🚀 محرك HFT V2 - رادار التحكيم الثلاثي اللحظي</div>
-                <div style="color: #aaa; font-size: 12px; margin-top:5px;">حالة المحرك: مستقر ويقنص بالملي ثانية 🛡️</div>
+            <div class="container">
+                <h2>🚀 محرك HFT V2 - التحكيم الثلاثي</h2>
+                <p><b>الحالة:</b> {radar_data['status']}</p>
+                <hr style="border-color:#222;">
+                <p>💰 سعر BTCUSDT: <span class="price">{radar_data['btc_price']} USDT</span></p>
+                <p>💰 سعر DOTBTC: <span class="price">{radar_data['dot_btc']} BTC</span></p>
+                <p>💰 سعر DOTUSDT: <span class="price">{radar_data['dot_usdt']} USDT</span></p>
+                <hr style="border-color:#222;">
+                <p>🎯 <b>النتيجة اللحظية:</b> {radar_data['profit_msg']}</p>
             </div>
-            <div id="log-container">
-                <div class="line blue">⚙️ جاري تحضير البيئة السحابية والربط ببينانس...</div>
-            </div>
-
-            <script>
-                var socket = io();
-                var container = document.getElementById('log-container');
-                
-                socket.on('radar_log', function(msg) {
-                    var div = document.createElement('div');
-                    div.className = 'line';
-                    
-                    // تلوين الأسطر بناءً على نوع الرسالة البرمجية
-                    if (msg.includes('✨') || msg.includes('نجاح')) {
-                        div.className = 'line green';
-                    } else if (msg.includes('🔄')) {
-                        div.className = 'line yellow';
-                    } else if (msg.includes('📡')) {
-                        div.className = 'line blue';
-                    } else if (msg.includes('📈')) {
-                        div.className = 'line purple';
-                    }
-                    
-                    div.innerHTML = msg;
-                    container.appendChild(div);
-                    
-                    // النزول التلقائي لأسفل الشاشة مع تدفق الأسطر الجديدة
-                    container.scrollTop = container.scrollHeight;
-                });
-            </script>
         </body>
     </html>
     """
-    return html
 
-# --- 2. محرك التحكيم الثلاثي الحسابي بأجزاء الثانية ---
-API_KEY = os.getenv('BINANCE_API_KEY')
-SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
-
-TRIANGLE_PAIRS = ["BTCUSDT", "DOTBTC", "DOTUSDT"]
-streams = [f"{pair.lower()}@ticker" for pair in TRIANGLE_PAIRS]
-
-def send_to_web(message):
-    """إرسال السطر فوراً ليعرض على شاشة الجوال بشكل حي"""
-    socketio.emit('radar_log', message)
-
-async def check_triangular_arbitrage():
-    global trade_lock
-    p1 = prices["BTCUSDT"]
-    p2 = prices["DOTBTC"]
-    p3 = prices["DOTUSDT"]
+def run_arbitrage_loop():
+    """محرك تقليدي صلب يطلب الأسعار كل ثانيتين بدون تعقيد Async"""
+    api_key = os.getenv('BINANCE_API_KEY')
+    secret_key = os.getenv('BINANCE_SECRET_KEY')
     
-    if p1 == 0.0 or p2 == 0.0 or p3 == 0.0:
-        return
-    if trade_lock:
-        return
-
-    simulated_return = (1.0 / p1) / p2 * p3
-    net_profit_pct = (simulated_return - 1.0) * 100
-    
-    # قنص فرصة التحكيم الثلاثي اللحظية
-    if simulated_return > 1.0001:
-        trade_lock = True
-        send_to_web(f"✨ [المثلث الناجح] قنص لحظي! المسار: USDT ➡️ BTC ➡️ DOT")
-        send_to_web(f"📈 العائد المحاكى: {simulated_return:.6f} | الربح: +{net_profit_pct:.4f}%")
-        await asyncio.sleep(0.1)
-        trade_lock = False
-
-async def run_binance_hft():
-    if not API_KEY or not SECRET_KEY:
-        send_to_web("❌ خطأ قاطع: لم يتم العثور على مفاتيح Binance!")
-        return
-
-    client = await AsyncClient.create(API_KEY, SECRET_KEY, testnet=True)
-    bm = BinanceSocketManager(client)
-    multiplex_socket = bm.multiplex_socket(streams)
-    
-    send_to_web("📡 رادار التحكيم الثلاثي متصل بنجاح ببث الأسعار المباشر (WebSockets)...")
-
-    async with multiplex_socket as stream:
+    try:
+        # الاتصال التقليدي المباشر
+        client = Client(api_key, secret_key, testnet=True)
+        
         while True:
             try:
-                res = await stream.recv()
-                if res and 'data' in res:
-                    data = res['data']
-                    pair_name = data['s']
-                    current_close = float(data['c'])
+                # جلب الأسعار اللحظية بشكل مباشر وتتابعي
+                btc_usdt = float(client.get_symbol_ticker(symbol="BTCUSDT")['price'])
+                dot_btc = float(client.get_symbol_ticker(symbol="DOTBTC")['price'])
+                dot_usdt = float(client.get_symbol_ticker(symbol="DOTUSDT")['price'])
+                
+                # تحديث الذاكرة فوراً
+                radar_data["btc_price"] = str(btc_usdt)
+                radar_data["dot_btc"] = str(dot_btc)
+                radar_data["dot_usdt"] = str(dot_usdt)
+                
+                # حساب معادلة التحكيم الثلاثي للمثلث (USDT -> BTC -> DOT -> USDT)
+                simulated_return = (1.0 / btc_usdt) / dot_btc * dot_usdt
+                net_profit = (simulated_return - 1.0) * 100
+                
+                if simulated_return > 1.0001:
+                    radar_data["profit_msg"] = f"✨ [مثلث ناجح] تم قنص فجوة ربح بقيمة: +{net_profit:.4f}% 🎉"
+                else:
+                    radar_data["profit_msg"] = f"🔍 فحص مستمر... العائد الحالي: {net_profit:.4f}% (لا يوجد فجوة مربحة)"
                     
-                    if pair_name in prices:
-                        prices[pair_name] = current_close
-                        # بث الأسعار اللحظية متتالية على شاشة الويب
-                        send_to_web(f"🔄 [رادار حي] تحديث سعر {pair_name}: {current_close}")
-                        asyncio.create_task(check_triangular_arbitrage())
-            except Exception:
-                await asyncio.sleep(0.2)
-
-def start_radar_loop():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(run_binance_hft())
+            except Exception as e:
+                radar_data["status"] = f"⚠️ خطأ أثناء تحديث الأسعار: {str(e)}"
+                
+            time.sleep(2) # انتظر ثانيتين ثم كرر الطلب المباشر
+    except Exception as e:
+        radar_data["status"] = f"❌ فشل الاتصال الأولي ببينانس: {str(e)}"
 
 if __name__ == "__main__":
-    # 1. تشغيل رادار قنص بينانس في الخلفية
-    hft_thread = threading.Thread(target=start_radar_loop, daemon=True)
-    hft_thread.start()
-
-    # 2. تشغيل خادم الويب المتطور المتوافق مع البث المباشر لـ Render
+    # تشغيل المحرك المباشر في الخلفية
+    t = threading.Thread(target=run_arbitrage_loop, daemon=True)
+    t.start()
+    
+    # تشغيل خادم الويب على المنفذ المطلوب
     port = int(os.environ.get("PORT", 10000))
-    socketio.run(app, host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=port, use_reloader=False)
