@@ -1,20 +1,18 @@
 import os
 import asyncio
 import threading
-import time
-import requests
 from flask import Flask
 from binance import AsyncClient, BinanceSocketManager
 
 app = Flask(__name__)
 
-# لوحة القيادة المتطورة والمحمية V3
+# لوحة القيادة المالية المتقدمة V4
 bot_stats = {
-    "status": "⚙️ Booting HFT Core V3...",
-    "total_trades": 0,
-    "simulated_balance_usdt": 10000.0,
+    "status": "⚙️ Booting HFT Enterprise V4...",
+    "balance_usdt": 10000.0,
     "net_profit_usdt": 0.0,
-    "last_trade": "No enterprise trades captured yet"
+    "total_trades": 0,
+    "last_alert": "System checking indicators and market rules..."
 }
 
 @app.route('/')
@@ -23,45 +21,33 @@ def home():
     <html>
         <head>
             <meta http-equiv="refresh" content="1">
-            <title>HFT Core V3 - Enterprise Dashboard</title>
+            <title>HFT Core V4 - Multi-Asset System</title>
             <style>
-                body {{ font-family: 'Courier New', monospace; background: #080808; color: #00ff00; padding: 20px; text-align: center; }}
-                .dashboard {{ border: 2px solid #00ff00; padding: 25px; display: inline-block; background: #111; border-radius: 8px; text-align: left; min-width: 450px; box-shadow: 0 0 15px rgba(0,255,0,0.2); }}
+                body {{ font-family: 'Courier New', monospace; background: #050505; color: #00ff00; padding: 20px; text-align: center; }}
+                .dashboard {{ border: 2px solid #00ff00; padding: 25px; display: inline-block; background: #111; border-radius: 8px; text-align: left; min-width: 500px; box-shadow: 0 0 20px rgba(0,255,0,0.3); }}
                 h2 {{ color: #ffcc00; text-align: center; margin-top: 0; }}
                 .metric {{ color: #00ffff; font-weight: bold; }}
+                .status {{ color: #5cb85c; font-weight: bold; }}
                 .profit {{ color: #5cb85c; font-weight: bold; }}
                 .danger {{ color: #d9534f; font-weight: bold; }}
             </style>
         </head>
         <body>
             <div class="dashboard">
-                <h2>📊 لوحة القيادة المؤسساتية - HFT Core V3</h2>
-                <p><b>حالة نظام الرادار:</b> <span class="profit">{bot_stats['status']}</span></p>
+                <h2>🎛️ نظام HFT المؤسساتي الشامل - V4</h2>
+                <p><b>حالة النظام العام:</b> <span class="status">{bot_stats['status']}</span></p>
                 <div style="font-size:11px; color:#aaa; margin-bottom:10px;">⏰ درع الاستيقاظ النشط (Anti-Sleep): شغال 🟢</div>
-                <hr style="border-color:#222;">
-                <p>💵 رصيد المحفظة الحالي: <span class="metric">{bot_stats['simulated_balance_usdt']:.2f} USDT</span></p>
-                <p>📈 صافي أرباح المحرك الصافية: <span class="{'profit' if bot_stats['net_profit_usdt'] >= 0 else 'danger'}">{bot_stats['net_profit_usdt']:.4f} USDT</span></p>
-                <p>🔄 العمليات الناجحة المفلترة: <span class="metric">{bot_stats['total_trades']} صفقة ثلاثية</span></p>
-                <hr style="border-color:#222;">
-                <p>🎯 <b>آخر قنص فلتره درع الأمان:</b> <br><span style="color: #aaa; font-size: 12px;">{bot_stats['last_trade']}</span></p>
+                <hr style="border-color: #222;">
+                <p>💵 إجمالي رأس المال: <span class="metric">{bot_stats['balance_usdt']:.2f} USDT</span></p>
+                <p>📈 صافي الأرباح المحققة: <span class="{'profit' if bot_stats['net_profit_usdt'] >= 0 else 'danger'}">{bot_stats['net_profit_usdt']:.4f} USDT</span></p>
+                <p>🔄 الصفقات المنفذة بالقوانين: <span class="metric">{bot_stats['total_trades']} صفقة</span></p>
+                <hr style="border-color: #222;">
+                <p>🚨 <b>آخر إشعار من الرادار والمؤشرات:</b> <br><span style="color: #ffcc00; font-size: 12px;">{bot_stats['last_alert']}</span></p>
             </div>
         </body>
     </html>
     """
     return html
-
-# --- ⏰ دالة إيقاظ ريندر ومنعه من النوم تلقائياً ---
-def wake_up_render():
-    """تقوم بطلب رابط الحساب كل 10 دقائق لإبقاء السيرفر مستيقظاً دائماً"""
-    time.sleep(30) # انتظر حتى يكتمل بناء السيرفر أولاً
-    url = "https://onrender.com"
-    while True:
-        try:
-            requests.get(url, timeout=10)
-            print("📡 [Anti-Sleep] تم إرسال إشارة إيقاظ بنجاح للسيرفر لمنعه من الخمول.")
-        except Exception as e:
-            print(f"⚠️ [Anti-Sleep] فشل إرسال إشارة الإيقاظ مؤقتاً: {e}")
-        time.sleep(600) # كرر العملية كل 10 دقائق (600 ثانية)
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -70,45 +56,97 @@ def run_flask():
 API_KEY = os.getenv('BINANCE_API_KEY')
 SECRET_KEY = os.getenv('BINANCE_SECRET_KEY')
 
-ALL_PAIRS = ["BTCUSDT", "DOTBTC", "DOTUSDT", "SOLBTC", "SOLUSDT", "XRPBTC", "XRPUSDT", "ETHBTC", "ETHUSDT"]
-streams = [f"{pair.lower()}@ticker" for pair in ALL_PAIRS]
+# مراقبة الأصول الساخنة الكبرى في السوق الحقيقي
+SYMBOLS = ["BTCUSDT", "SOLUSDT", "ETHUSDT"]
+streams = [f"{symbol.lower()}@ticker" for symbol in SYMBOLS]
 
-prices = {pair: 0.0 for pair in ALL_PAIRS}
-trade_lock = False
+prices_history = {symbol: [] for symbol in SYMBOLS}
+active_positions = {}
 
-async def evaluate_triangle(name, p_btc, p_alt_btc, p_alt_usdt):
-    global trade_lock
-    if p_btc == 0 or p_alt_btc == 0 or p_alt_usdt == 0 or trade_lock:
+# إعدادات المخاطر وأوامر الـ Stop Loss والـ Limit
+TRADE_SIZE_USDT = 500.0   
+STOP_LOSS_RULE = 0.005     # وقف خسارة صارم عند 0.5% لحماية رأس المال
+LIMIT_PROFIT_RULE = 0.01   # جني أرباح مستهدف بأمر حد عند صعود 1%
+
+def calculate_rsi(prices_list, period=14):
+    """محرك حساب مؤشر RSI مدمج وسريع جداً لأجزاء الثانية"""
+    if len(prices_list) < period + 1:
+        return 50.0  # قيمة حيادية إذا كانت البيانات غير كافية
+    
+    gains = []
+    losses = []
+    for i in range(len(prices_list) - period, len(prices_list)):
+        diff = prices_list[i] - prices_list[i-1]
+        if diff >= 0:
+            gains.append(diff)
+            losses.append(0)
+        else:
+            gains.append(0)
+            losses.append(abs(diff))
+            
+    avg_gain = sum(gains) / period
+    avg_loss = sum(losses) / period
+    
+    if avg_loss == 0:
+        return 100.0
+    rs = avg_gain / avg_loss
+    return 100.0 - (100.0 / (1.0 + rs))
+
+async def process_advanced_market_rules(symbol, current_price):
+    global active_positions, bot_stats, prices_history
+    
+    # تحديث التاريخ السعري لحساب المؤشرات
+    prices_history[symbol].append(current_price)
+    if len(prices_history[symbol]) > 50:
+        prices_history[symbol].pop(0)
+        
+    # 1) إدارة الصفقات المفتوحة (تطبيق قوانين الـ Stop Loss والـ Limit)
+    if symbol in active_positions:
+        pos = active_positions[symbol]
+        entry_price = pos['entry_price']
+        price_change = (current_price - entry_price) / entry_price
+        
+        # أ) قانون أمر الحد لجني الأرباح (Limit Order) خصم العمولات 0.1%
+        if price_change >= LIMIT_PROFIT_RULE:
+            profit = (TRADE_SIZE_USDT * LIMIT_PROFIT_RULE) - (TRADE_SIZE_USDT * 0.001)
+            bot_stats["total_trades"] += 1
+            bot_stats["balance_usdt"] += profit
+            bot_stats["net_profit_usdt"] += profit
+            bot_stats["last_alert"] = f"💰 [Limit Order Hit] تم بيع {symbol} بربح صافي: +{profit:.2f} USDT 🎉"
+            del active_positions[symbol]
+            
+        # ب) قانون وقف الخسارة الصارم (Stop Loss Rule)
+        elif price_change <= -STOP_LOSS_RULE:
+            loss = (TRADE_SIZE_USDT * STOP_LOSS_RULE) + (TRADE_SIZE_USDT * 0.001)
+            bot_stats["total_trades"] += 1
+            bot_stats["balance_usdt"] -= loss
+            bot_stats["net_profit_usdt"] -= loss
+            bot_stats["last_alert"] = f"🚨 [Stop Loss Triggered] الخروج من {symbol} لحماية المحفظة عند خسارة: -{loss:.2f} USDT"
+            del active_positions[symbol]
         return
 
-    simulated_return = (1.0 / p_btc) / p_alt_btc * p_alt_usdt
+    # 2) حساب مؤشر RSI اللحظي لاتخاذ قرار الدخول بأمر حد
+    rsi_value = calculate_rsi(prices_history[symbol])
     
-    # درع الأمان: خصم العمولات (0.3%) + هامش انزلاق سعر أمان (0.05%)
-    total_deductions = 0.003 + 0.0005 
-    net_return = simulated_return - total_deductions
-    
-    trade_size = 1000.0
-    profit_usdt = (net_return - 1.0) * trade_size
-    
-    # 🎯 لا يمر إلا الربح الصافي الفعلي بعد العمولات
-    if profit_usdt > 0.0:
-        trade_lock = True
-        bot_stats["total_trades"] += 1
-        bot_stats["simulated_balance_usdt"] += profit_usdt
-        bot_stats["net_profit_usdt"] += profit_usdt
-        bot_stats["last_trade"] = f"✨ قنص مؤسساتي ناجح بمثلث [{name}]! الربح الصافي: +{profit_usdt:.4f} USDT"
-        await asyncio.sleep(0.05)
-        trade_lock = False
+    # إشارة الدخول: إذا كان الـ RSI تحت 30 (تشبع بيعي وقاع ممتاز للشراء)
+    if rsi_value < 30.0 and symbol not in active_positions:
+        # وضع أمر حد للشراء (Limit Buy) تحت سعر السوق بـ 0.05% لاقتناص السعر بدقة
+        limit_buy_price = current_price * 0.9995
+        
+        bot_stats["last_alert"] = f"🛒 [RSI={rsi_value:.1f}] تعليق أمر شراء حد لـ {symbol} عند سعر {limit_buy_price:.2f}"
+        
+        active_positions[symbol] = {
+            "entry_price": limit_buy_price,
+            "amount": TRADE_SIZE_USDT
+        }
 
-async def run_hft_enterprise_core():
-    global prices
-    bot_stats["status"] = "Connecting to Mainnet WebSockets..."
-    
+async def run_hft_v4_core():
+    bot_stats["status"] = "Connecting to Live WebSockets..."
     client = await AsyncClient.create(API_KEY, SECRET_KEY)
     bm = BinanceSocketManager(client)
     multiplex_socket = bm.multiplex_socket(streams)
     
-    bot_stats["status"] = "HFT Core V3 Active - 4 Triangles Under Radar 📡"
+    bot_stats["status"] = "HFT V4 Active - RSI & Limit Rules Enabled ⚡"
 
     async with multiplex_socket as stream:
         while True:
@@ -116,34 +154,17 @@ async def run_hft_enterprise_core():
                 res = await stream.recv()
                 if res and 'data' in res:
                     data = res['data']
-                    pair_name = data['s']
-                    current_close = float(data['c'])
+                    symbol = data['s']
+                    current_price = float(data['c'])
                     
-                    if pair_name in prices:
-                        prices[pair_name] = current_close
-                        p_btc = prices["BTCUSDT"]
-                        
-                        # فحص الـ 4 مثلثات الحارة معاً بالملي ثانية
-                        asyncio.create_task(evaluate_triangle("BTC-DOT", p_btc, prices["DOTBTC"], prices["DOTUSDT"]))
-                        asyncio.create_task(evaluate_triangle("BTC-SOL", p_btc, prices["SOLBTC"], prices["SOLUSDT"]))
-                        asyncio.create_task(evaluate_triangle("BTC-XRP", p_btc, prices["XRPBTC"], prices["XRPUSDT"]))
-                        asyncio.create_task(evaluate_triangle("BTC-ETH", p_btc, prices["ETHBTC"], prices["ETHUSDT"]))
+                    asyncio.create_task(process_advanced_market_rules(symbol, current_price))
             except Exception:
                 await asyncio.sleep(0.001)
 
-def start_enterprise_loop():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(run_hft_enterprise_core())
-
 if __name__ == "__main__":
-    # 1. تشغيل خادم ويب Flask
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
     
-    # 2. تشغيل درع إيقاظ ريندر ومنعه من النوم تلقائياً
-    anti_sleep_thread = threading.Thread(target=wake_up_render, daemon=True)
-    anti_sleep_thread.start()
-    
-    # 3. تشغيل محرك أجزاء الثانية المؤسساتي الخارق
-    start_enterprise_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(run_hft_v4_core())
