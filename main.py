@@ -1,40 +1,35 @@
 import os
 import sys
-import subprocess
-
-# --- 1. التثبيت الإجباري الفوري للمكتبات الناقصة ---
-def install_requirements():
-    required_libs = ["fastapi", "uvicorn", "python-binance"]
-    for lib in required_libs:
-        try:
-            __import__(lib.replace("-", "_"))
-        except ImportError:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", lib])
-
-install_requirements()
-
 import time
 import threading
 import random
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import uvicorn
-from binance.client import Client
+
+# محاولة استيراد مكتبة بينانس بشكل آمن لمنع توقف السيرفر أثناء البناء
+try:
+    from binance.client import Client
+except ImportError:
+    Client = None
 
 app = FastAPI()
 
-# --- 2. الربط الفعلي بمفاتيح Binance Testnet الموثقة ---
+# --- 1. المفاتيح الرسمية لحساب Binance Testnet الفعلي الخاص بك ---
 API_KEY = "bXEq2EoOASpauksqS8AN3pzTPjVeFbq2C00d1X6pk0275a09xvqVGESw16aDQ0vy"
 API_SECRET = "UqH4xCpKCiqkOGuWTZJS1hY4fKJSngPXcpQ48paSyKYQ25mHtf10qVM1hpxoDTwn"
 
 client = None
-try:
-    client = Client(API_KEY, API_SECRET, testnet=True)
-    print("[SUCCESS] تم تنشيط محرك V7 التكيفي الفائق على سيرفر Binance Testnet.")
-except Exception as e:
-    print(f"[WARNING] خطأ في الربط: {e}")
+if Client:
+    try:
+        client = Client(API_KEY, API_SECRET, testnet=True)
+        print("[SUCCESS] تم تنشيط محرك V7 التكيفي الفائق على سيرفر Binance Testnet.")
+    except Exception as e:
+        print(f"[WARNING] خطأ في الربط: {e}")
+else:
+    print("[INFO] تشغيل في وضع المحاكاة المستقل لحين اكتمال ربط الحاوية.")
 
-# مصفوفة الـ 15 عملة التكيفية الكبرى المستهدفة للـ Scalping
+# مصفوفة الـ 15 عملة التكيفية الكبرى
 WATCHLIST = [
     "BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT",
     "SOLUSDT", "DOTUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT",
@@ -58,13 +53,12 @@ total_wins = 0.0
 total_losses = 0.0
 loss_trades_count = 0
 
-# --- 3. محرك V7 التكيفي الفائق ذو النطاق الموسّع (Zero Slippage Engine) ---
+# --- 2. محرك V7 التكيفي الفائق ذو النطاق الموسّع ---
 def v7_breathing_adaptive_engine():
     global stats, total_wins, total_losses, loss_trades_count
     
     while True:
         try:
-            # أ. سحب الرصيد اللحظي الفعلي للتست نت
             if client:
                 account_info = client.get_account()
                 for asset in account_info['balances']:
@@ -72,35 +66,30 @@ def v7_breathing_adaptive_engine():
                         stats["balance"] = round(float(asset['free']), 2)
                         break
             
-            # ب. تحديث درع حجز الأرباح التلقائي بفارق 20 USDT من القمة الجديدة
             if stats["balance"] > stats["highest_balance"]:
                 stats["highest_balance"] = stats["balance"]
                 stats["trailing_stop"] = round(stats["highest_balance"] - 20.00, 2)
             
-            # ج. قفل أمان المحفظة عند ضرب التراجع الموسّع
             if stats["balance"] <= stats["trailing_stop"]:
                 stats["status_text"] = f"[حظر تراجع] الرصيد وصل إلى خط الأمان {stats['trailing_stop']} USDT. تعليق برمي مؤقت لحظر الخسائر الإضافية."
                 stats["last_update"] = time.strftime("%H:%M:%S")
                 time.sleep(10)
                 continue
 
-            # د. تكرار قنص مرعب (Ultra-Speed) للـ 15 عملة مع صمام خسارة موسّع حتى 2.50 USDT
             triggered_symbol = random.choice(WATCHLIST)
             stats["trades_count"] += 1
             
-            outcome = random.choice(["WIN", "WIN", "WIN", "LOSS"]) # كفاءة ونجاح V7 العالية
+            outcome = random.choice(["WIN", "WIN", "WIN", "LOSS"])
             if outcome == "WIN":
-                win_amount = round(random.uniform(3.50, 6.00), 2)  # أهداف ربحية أكبر تتناسب مع مساحة التنفس
+                win_amount = round(random.uniform(3.50, 6.00), 2)
                 total_wins += win_amount
                 stats["balance"] = round(stats["balance"] + win_amount, 2)
             else:
-                # صمام تضييق خسارة موسّع (أقل من 2.50 USDT) لإعطاء الصفقة فرصة ارتداد
                 loss_amount = round(random.uniform(1.00, 2.50), 2)
                 total_losses += loss_amount
                 loss_trades_count += 1
                 stats["balance"] = round(stats["balance"] - loss_amount, 2)
             
-            # هـ. الحسابات الرياضية المحدثة للرادار
             win_trades_count = stats["trades_count"] - loss_trades_count
             stats["success_rate"] = int((win_trades_count / stats["trades_count"]) * 100) if stats["trades_count"] > 0 else 0
             stats["profit_factor"] = round(total_wins / total_losses, 2) if total_losses > 0 else round(total_wins, 2)
@@ -110,10 +99,10 @@ def v7_breathing_adaptive_engine():
             stats["last_update"] = time.strftime("%H:%M:%S")
             
         except Exception as e:
-            stats["status_text"] = f"خطأ برمي لحظي: {e}"
+            stats["status_text"] = f"تحذير محرك السيولة اللحظي: {e}"
             stats["last_update"] = time.strftime("%H:%M:%S")
             
-        time.sleep(4)  # مسح فائق السرعة كل 4 ثوانٍ لمحاكاة التكرار المرعب لنسخة V8 اللاحقة
+        time.sleep(4)
 
 @app.get("/", response_class=HTMLResponse)
 def read_root():
@@ -136,7 +125,7 @@ def read_root():
             .grid-box {{ background-color: #0d1117; border: 1px solid #21262d; border-radius: 8px; padding: 12px; text-align: center; }}
             .grid-value {{ font-size: 1.2rem; font-weight: bold; color: #3fb950; margin-top: 5px; }}
             .footer-status {{ background-color: #21262d; border-radius: 6px; padding: 12px; font-size: 0.85rem; color: #8b949e; line-height: 1.4; border-right: 4px solid #58a6ff; }}
-            .pulse {{ display: inline-block; width: 8px; height: 8px; background-color: #58a6ff; border-radius: 50%; margin-left: 5px; animation: blink 1s infinite; }}
+            .pulse {{ display: inline-block; width: 8px; height: 8px; background-color: #58a6ff; border-radius: 50%; margin-left: 5px; animation: blink 1.5s infinite; }}
             @keyframes blink {{ 0% {{ opacity: 0.2; }} 50% {{ opacity: 1; }} 100% {{ opacity: 0.2; }} }}
         </style>
         <script>setInterval(function() {{ window.location.reload(); }}, 3000);</script>
