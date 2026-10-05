@@ -3,18 +3,18 @@ import sys
 import asyncio
 import random
 import time
-import math
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 import uvicorn
+
+# تأمين تعريف خادم الويب الإجباري لمنع عطل ASGI app
+app = FastAPI()
 
 try:
     from binance.client import Client
     from binance.exceptions import BinanceAPIException
 except ImportError:
     Client = None
-
-app = FastAPI()
 
 TOKEN = "HFT_V7_LIVE_COMPLIANCE"
 MARKET_REGIME = "ADAPTIVE"
@@ -34,12 +34,7 @@ if Client:
 else:
     api_status = "المحرك في وضع الاستعداد المحلي"
 
-WATCHLIST_INFO = {
-    "BTCUSDT": 5, "ETHUSDT": 4, "BNBUSDT": 3, "XRPUSDT": 1, "ADAUSDT": 1,
-    "SOLUSDT": 2, "DOTUSDT": 2, "DOGEUSDT": 0, "AVAXUSDT": 2, "LINKUSDT": 2,
-    "MATICUSDT": 1, "UNIUSDT": 2, "LTCUSDT": 3, "APTUSDT": 2, "NEARUSDT": 2
-}
-WATCHLIST = list(WATCHLIST_INFO.keys())
+WATCHLIST = ["BTCUSDT", "ETHUSDT", "BNBUSDT", "XRPUSDT", "ADAUSDT", "SOLUSDT", "DOTUSDT", "DOGEUSDT", "AVAXUSDT", "LINKUSDT", "MATICUSDT", "UNIUSDT", "LTCUSDT", "APTUSDT", "NEARUSDT"]
 
 stats = {
     "balance": 1000.00,
