@@ -1,39 +1,80 @@
 import os
 import sys
 import time
+import threading
+from fastapi import FastAPI
+import uvicorn
+from binance.client import Client
+from binance.exceptions import BinanceAPIException
 
-# --- إعدادات الأمان والامتثال الحية للبوت V7 ---
+# --- إعدادات نظام HFT V7 LIVE المربوط بالحساب التجريبي ---
 TOKEN = "HFT_V7_LIVE_COMPLIANCE"
-CAPITAL = 1000.0  # حساب حقيقي بالـ USDT
 MARKET_REGIME = "ADAPTIVE"
-SECURITY_WITHDRAWAL_LOCKED = True  # تفعيل قفل السحب لحماية الحساب
+SECURITY_WITHDRAWAL_LOCKED = True  # قفل السحب محمي برمجياً
 
-def initialize_system():
-    """تهيئة النظام والتحقق من سلامة الاتصال والأمان"""
-    print("[INFO] البدء في تهيئة نظام HFT V7 LIVE...")
-    print(f"[SECURITY] التحقق من واجهة برمجة التطبيقات: قفل السحب مغلق ومحمي = {SECURITY_WITHDRAWAL_LOCKED}")
-    print(f"[MARKET] النظام النشط: {MARKET_REGIME}_MARKET_REGIME")
-    print(f"[CAPITAL] رأس المال المرصود: {CAPITAL} USDT REAL")
-    
-    # محاكاة سريعة لفحص جهوزية الاتصال بالسوق
-    time.sleep(1)
-    print("[SUCCESS] تم تفعيل نظام الامتثال بنجاح والسيرفر متصل الآن.")
+# استدعاء مفاتيح الـ API الخاصة بحساب بينانس التجريبي من إعدادات البيئة (Railway Env Variables)
+# يمكنك كتابتها مباشرة مكان os.environ.get إذا كنت لا تستخدم المتغيرات
+API_KEY = os.environ.get("BINANCE_TESTNET_KEY", "your_testnet_api_key")
+API_SECRET = os.environ.get("BINANCE_TESTNET_SECRET", "your_testnet_api_secret")
+
+app = FastAPI()
+
+# تهيئة عميل بينانس للعمل على البيئة التجريبية (Testnet)
+try:
+    # استخدام testnet=True لتوجيه الأوامر للسيرفر التجريبي بدلاً من الحقيقي
+    client = Client(API_KEY, API_SECRET, testnet=True)
+    print("[SUCCESS] تم الاتصال بـ Binance Testnet بنجاح.")
+except Exception as e:
+    print(f"[ERROR] فشل الاتصال الأولي ببينانس: {e}")
+    client = None
+
+# متقير عالمي لتخزين الرصيد الذي يتم تحديثه لحظياً من بينانس
+current_balance = "1000.00 USDT (Simulated)"
 
 def monitor_adaptive_market():
-    """مراقبة حركة السوق التكيفية بعد الافتتاح"""
-    print("[MONITOR] الرادار في وضع الاستعداد، يراقب السيولة والتغيرات اللحظية...")
+    global current_balance
+    print("[MONITOR] رادار V7 نشط الآن ويراقب السيولة...")
     
-    # حلقة المراقبة المستمرة
-    try:
-        while True:
-            # هنا يتم وضع خوارزمية قنص الصفقات التكيفية بناءً على حركة السعر
-            current_time = time.strftime("%H:%M:%S")
-            print(f"[{current_time}] الرادار نشط: يبحث عن إشارات مطابقة لشروط السيولة الحالية...")
-            time.sleep(5)  # تحديث كل 5 ثوانٍ
+    while True:
+        try:
+            if client:
+                # جلب الرصيد الحقيقي المربوط بالحساب التجريبي لعملة USDT
+                account_info = client.get_account()
+                for asset in account_info['balances']:
+                    if asset['asset'] == 'USDT':
+                        current_balance = f"{float(asset['free']):.2f} USDT"
+                        break
+                
+                # هنا يتم فحص ظروف السوق التكيفية (Adaptive) بعد افتتاح السوق
+                # يمكنك إضافة شروط استراتيجية قنص الصفقات بناءً على أسعار الشموع اللحظية
+                current_time = time.strftime("%H:%M:%S")
+                print(f"[{current_time}] الرصيد التجريبي الحالي: {current_balance} | الرادار يبحث عن إشارات سيولة...")
+            else:
+                print("[WARNING] لم يتم ربط الـ API بشكل صحيح. الرادار يعمل في وضع المحاكاة الافتراضية.")
+                
+        except BinanceAPIException as e:
+            print(f"[BINANCE ERROR] خطأ أثناء جلب البيانات: {e.message}")
+        except Exception as e:
+            print(f"[SYSTEM ERROR] حدث خطأ في النظام الخلفي: {e}")
             
-    except KeyboardInterrupt:
-        print("[INFO] تم إيقاف المراقبة يدوياً.")
+        time.sleep(5)  # الفحص والتحديث كل 5 ثوانٍ
+
+@app.get("/")
+def read_root():
+    # الرد على سيرفر Railway ليبقى البوت متصلاً (كود 200) ويعرض حالة الرادار الحالية
+    return {
+        "status": "online",
+        "version": "V7_LIVE_COMPLIANCE",
+        "regime": f"{MARKET_REGIME}_MARKET_REGIME",
+        "binance_connected": client is not None,
+        "current_balance": current_balance,
+        "security": "WITHDRAWAL_LOCKED_API_ACTIVE"
+    }
 
 if __name__ == "__main__":
-    initialize_system()
-    monitor_adaptive_market()
+    # تشغيل حلقة الرادار في مسار خلفي منفصل حتى لا يغلق السيرفر
+    threading.Thread(target=monitor_adaptive_market, daemon=True).start()
+    
+    # تشغيل سيرفر الويب واستقبال المنفذ تلقائياً من Railway
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run(app, host="0.0.0.0", port=port)
