@@ -2,3 +2,5 @@ python-binance
 asyncio
 websockets
 flask
+fastapi
+unicorn
