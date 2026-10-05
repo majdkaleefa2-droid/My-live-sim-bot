@@ -6,12 +6,12 @@ from flask import Flask, render_template_string
 app = Flask(__name__)
 
 # ==========================================
-# 1. محرك البيانات المالي والملاحقة الديناميكية (50$)
+# 1. محرك البيانات المالي المطور (تضييق الخسائر الصارم)
 # ==========================================
-class TradingRadarCore:
+class AdvancedTradingRadar:
     def __init__(self):
-        # البيانات الأساسية الحية المستوحاة من رادارك
-        self.status = "HFT V5 Active (Trailing Mode)"
+        # البيانات الحية التراكمية
+        self.status = "HFT V6 Active (Tight Risk Mode)"
         self.assets_count = 15
         self.initial_capital = 10000.0
         self.capital = 10026.25
@@ -20,15 +20,15 @@ class TradingRadarCore:
         self.winning_trades = 462
         self.losing_trades = 18
         
-        # الأموال التراكمية بالدولار لاستخراج الإحصائيات
+        # الأموال التراكمية بالدولار
         self.total_win_amount = 88.50   
         self.total_loss_amount = 62.25  
         
         self.last_snipe = "SHIBUSDT منذ 5.95 ثانية"
         
-        # إعدادات الملاحقة الديناميكية الاحترافية (50$ Distance)
+        # إعدادات الملاحقة الديناميكية وحجم المخاطرة الصارم
         self.trailing_distance = 50.0
-        self.highest_equity = self.capital  # تتبع أعلى قمة يصل إليها الرصيد
+        self.highest_equity = self.capital  
         self.trailing_stop_level = self.highest_equity - self.trailing_distance
         self.bot_stopped_by_trailing = False
 
@@ -56,7 +56,6 @@ class TradingRadarCore:
             self.net_profit += amount
             self.capital += amount
             
-            # تحديث أعلى قمة للمحفظة ورفع خط الأمان ديناميكياً خلفها
             if self.capital > self.highest_equity:
                 self.highest_equity = self.capital
                 self.trailing_stop_level = self.highest_equity - self.trailing_distance
@@ -66,16 +65,16 @@ class TradingRadarCore:
             self.net_profit -= amount
             self.capital -= amount
 
-        # تفعيل الخروج الآلي وحجز الأرباح فور ملامسة خط الأمان المتحرك
+        # تفعيل الخروج التلقائي لحماية الأرباح
         if self.capital <= self.trailing_stop_level and self.highest_equity > self.initial_capital:
             self.status = "🔒 PROFITS LOCKED (Trailing Stop Hit)"
             self.bot_stopped_by_trailing = True
 
-# تفعيل محرك الرادار
-radar = TradingRadarCore()
+# تفعيل كائن الرادار
+radar = AdvancedTradingRadar()
 
 # ==========================================
-# 2. تصميم واجهة الرادار الشاملة مع خط الأمان المتحرك
+# 2. واجهة الرادار الشاملة والمطورة بالكامل
 # ==========================================
 RADAR_TEMPLATE = """
 <!DOCTYPE html>
@@ -83,7 +82,7 @@ RADAR_TEMPLATE = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>رادار السيولة الاحترافي - نظام الملاحقة الذكي</title>
+    <title>رادار السيولة الاحترافي - وضع تقليص المخاطر</title>
     <style>
         body { background-color: #0b0e11; color: #ffffff; font-family: Arial, sans-serif; padding: 15px; text-align: right; }
         .container { max-width: 480px; margin: auto; border: 2px solid #ffc107; padding: 20px; border-radius: 12px; background-color: #151a21; }
@@ -96,14 +95,14 @@ RADAR_TEMPLATE = """
         .box { padding: 10px 12px; border-radius: 8px; margin: 10px 0; font-size: 14px; }
         .stats-box { background-color: #1c2128; border-right: 4px solid #ffc107; }
         .financial-box { background-color: #17223b; border-right: 4px solid #58a6ff; }
-        .trailing-box { background-color: #24221c; border-right: 4px solid #ffaa00; font-size: 13.5px; }
+        .trailing-box { background-color: #24221c; border-right: 4px solid #ffaa00; }
         .shield { color: #ffc107; border-top: 1px solid #2d333b; padding-top: 10px; margin-top: 15px; font-size: 13px; text-align: center; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header" style="color: {{ '#ff4444' if radar.bot_stopped_by_trailing else '#00ff66' }}">
-            {{ radar.status }}
+        <div class="header" style="color: #00ff66;">
+            🛡️ {{ radar.status }}
         </div>
         
         <div class="row">
@@ -116,14 +115,14 @@ RADAR_TEMPLATE = """
             <span class="value profit">{{ "+%.4f"|format(radar.net_profit) if radar.net_profit >= 0 else "%.4f"|format(radar.net_profit) }} USDT</span>
         </div>
 
-        <!-- مربع الملاحقة الديناميكية الحية (50$) -->
+        <!-- مربع الملاحقة الديناميكية (50$) -->
         <div class="box trailing-box">
             <div class="row" style="margin: 3px 0;">
-                <span class="label">🔝 أعلى قمة وصل لها الرصيد:</span>
+                <span class="label">🔝 أعلى قمة للمحفظة:</span>
                 <span class="value" style="color: #00ff66;">{{ "%.2f"|format(radar.highest_equity) }} USDT</span>
             </div>
             <div class="row" style="margin: 3px 0;">
-                <span class="label">🛡️ خط قفل الأرباح الحالي (متحرك):</span>
+                <span class="label">🛡️ خط قفل الأرباح (متحرك):</span>
                 <span class="value" style="color: #ffaa00;">{{ "%.2f"|format(radar.trailing_stop_level) }} USDT</span>
             </div>
         </div>
@@ -138,6 +137,7 @@ RADAR_TEMPLATE = """
             </div>
         </div>
 
+        <!-- المربع المالي المحدث ليعكس تضييق حجم الخسارة العاكسة -->
         <div class="box financial-box">
             <div class="row">
                 <span class="label">💰 متوسط ربح الصفقة الناجحة:</span>
@@ -170,19 +170,23 @@ def home():
     metrics = radar.get_metrics()
     return render_template_string(RADAR_TEMPLATE, radar=radar, metrics=metrics)
 
+# ==========================================
+# 3. محاكي المحرك الخلفي المطور بتعديل المخاطرة الصارم
+# ==========================================
 async def live_trading_simulation():
     while True:
-        await asyncio.sleep(random.randint(4, 9))
+        await asyncio.sleep(random.randint(4, 8))
         if radar.bot_stopped_by_trailing:
             continue
             
-        # محاكاة حركة القنص المفتوحة والملاحقة النشطة
         is_win = random.choices([True, False], weights=[0.96, 0.04])
+        
         if is_win:
-            actual_win = round(random.uniform(0.5, 2.0), 4) # صعود سلس للقمم
+            actual_win = round(random.uniform(0.15, 0.25), 4) # ربح القنص السريع الافتراضي
             radar.update_market_trade(is_win=True, amount=actual_win)
         else:
-            actual_loss = round(random.uniform(3.0, 6.0), 4)
+            # 🎯 التطبيق العملي لتضييق الخسارة (STOP_0.15% كحد أقصى بدلاً من 3.4 دولار)
+            actual_loss = round(random.uniform(0.9, 1.3), 4) 
             radar.update_market_trade(is_win=False, amount=actual_loss)
 
 if __name__ == "__main__":
